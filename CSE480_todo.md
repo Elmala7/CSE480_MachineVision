@@ -1,32 +1,38 @@
 # Project Roadmap (CSE480)
 
-## Phase 1: Data Setup (Milestone 1)
-- [ ] **Download:** Get FER-2013 and UCF-101.
-- [ ] **Filter UCF-101:** Extract only `WalkingWithDog` (Walking), `StandUp` (Standing), `HandWaving` (Waving), and `SoccerPenalty` or similar (Sitting).
-- [ ] **Preprocessing Script:**
-    -   Images: Resize to 48x48.
-    -   Videos: Extract 16 frames per clip, resize to 128x128.
-- [ ] **Data Check:** Verify shapes `(N, 48, 48, 1)` for emotion and `(N, 16, 128, 128, 3)` for action.
+## Phase 1: Milestone 1 Setup (Action Only)
+- [ ] **Data Prep (Action):**
+    - [ ] Filter UCF-101 to 4 classes (Walking, Waving, Standing, Sitting).
+    - [ ] **Augmentation:** Add logic to flip/rotate frames during processing.
+    - [ ] Split into `train` and `test` (held-out) sets.
+- [ ] **Model Definition:** Create `build_action_model(optimizer)` function (CNN + LSTM 1-2 layers).
 
-## Phase 2: Model Training & Experimentation (The Experiment)
-- [ ] **Emotion Model:** Define a CNN (e.g., Mini-VGG).
-- [ ] **Action Model:** Define CNN-LSTM (MobileNet + LSTM).
-- [ ] **Optimizer Loop:**
-    -   Train Emotion Model with **SGD**. Save history.
-    -   Train Emotion Model with **Adam**. Save history.
-    -   Train Emotion Model with **Adagrad**. Save history.
-- [ ] **Compare:** Plot the 3 Loss Curves on one graph using Matplotlib.
-- [ ] **Select Best:** Save the best performing models as `emotion_best.keras` and `action_best.keras`.
+## Phase 2: The Optimizer Experiment (Milestone 1 Core)
+- [ ] **Train Loop:**
+    - [ ] Train Action Model with **SGD**. Save history & model.
+    - [ ] Train Action Model with **Adam**. Save history & model.
+    - [ ] Train Action Model with **Adagrad**. Save history & model.
+- [ ] **Analysis:**
+    - [ ] Plot all 3 loss curves on one graph.
+    - [ ] Select best model for the real-time phase.
+- [ ] **Report M1:** Generate charts and write the "Methods" section.
 
-## Phase 3: Real-Time Application (Milestone 2)
-- [ ] **Webcam Script:** Setup `cv2.VideoCapture(0)`.
-- [ ] **Face Detection:** Implement Haar Cascade or MediaPipe.
-- [ ] **Inference Logic:**
-    -   Pass face crop to Emotion Model.
-    -   Pass frame buffer (list of 16 images) to Action Model.
-- [ ] **Overlay:** Draw `Action: Walking` and `Emotion: Happy` on screen.
-- [ ] **FPS Counter:** Add `cv2.putText` showing `1 / (time_now - time_prev)`.
+## Phase 3: Milestone 2 Setup (Emotion)
+- [ ] **Data Prep (Emotion):** Process FER-2013 (Resize to 48x48).
+- [ ] **Architecture Experiment:**
+    - [ ] Train a simple VGG-style block.
+    - [ ] Train a ResNet-style block.
+    - [ ] Compare accuracy on FER-2013 test set.
+- [ ] **Selection:** Save the best Emotion model (`emotion_best.keras`).
 
-## Phase 4: Reporting
-- [ ] **Report M1:** Write 1 page on Data, 2-3 pages on Algorithms, and include the **Optimizer Comparison Plots**.
-- [ ] **Report M2:** Write about the Real-Time Latency and FPS on your Mac M1.
+## Phase 4: Integration & Real-Time (Milestone 2 Core)
+- [ ] **Pipeline:**
+    - [ ] Capture Webcam -> Detect Face -> Crop -> Predict Emotion.
+    - [ ] Buffer Frames -> Predict Action.
+- [ ] **Overlay:** Draw labels and FPS on screen.
+- [ ] **Optimization:** Thread the camera capture to improve FPS on M1.
+
+## Phase 5: Final Evaluation & Report
+- [ ] **Test Set Eval:** Run final accuracy check on the *unseen* test sets for both models.
+- [ ] **Discussion:** Write the "Justification" section explaining *why* Adam/SGD worked better.
+- [ ] **Preprocessing Page:** Write the dedicated 1-page section on data cleaning.
