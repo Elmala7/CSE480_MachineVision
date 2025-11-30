@@ -1,10 +1,10 @@
 # Project Roadmap (CSE480)
 
 ## Phase 1: Milestone 1 Setup (Action Only)
-- [ ] **Data Prep (Action):**
-    - [ ] Filter UCF-101 to 4 classes (Walking, Waving, Standing, Sitting).
-    - [ ] **Augmentation:** Add logic to flip/rotate frames during processing.
-    - [ ] Split into `train` and `test` (held-out) sets.
+- [x] **Data Prep (Action):**
+    - [x] Filter UCF-101 to 4 classes (Walking, Waving, Standing, Sitting).
+    - [x] **Augmentation:** Add logic to flip/rotate frames during processing.
+    - [x] Split into `train` and `test` (held-out) sets.
 - [ ] **Model Definition:** Create `build_action_model(optimizer)` function (CNN + LSTM 1-2 layers).
 
 ## Phase 2: The Optimizer Experiment (Milestone 1 Core)
