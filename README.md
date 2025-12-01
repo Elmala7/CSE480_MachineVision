@@ -2,7 +2,7 @@
 
 **Action & Emotion Recognition using Deep Learning**
 
-A real-time system for recognizing human actions and facial emotions using hybrid CNN-LSTM and CNN architectures, optimized for Mac M1.
+A real-time system for recognizing human actions and facial emotions using hybrid CNN-LSTM and CNN architectures.
 
 ## Project Overview
 
