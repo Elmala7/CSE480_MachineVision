@@ -5,15 +5,15 @@
     - [x] Filter UCF-101 to 4 classes (Walking, Waving, Standing, Sitting).
     - [x] **Augmentation:** Add logic to flip/rotate frames during processing.
     - [x] Split into `train` and `test` (held-out) sets.
-- [ ] **Model Definition:** Create `build_action_model(optimizer)` function (CNN + LSTM 1-2 layers).
+- [x] **Model Definition:** Create `build_action_model(optimizer)` function (CNN + LSTM 1-2 layers).
 
 ## Phase 2: The Optimizer Experiment (Milestone 1 Core)
-- [ ] **Train Loop:**
-    - [ ] Train Action Model with **SGD**. Save history & model.
-    - [ ] Train Action Model with **Adam**. Save history & model.
-    - [ ] Train Action Model with **Adagrad**. Save history & model.
-- [ ] **Analysis:**
-    - [ ] Plot all 3 loss curves on one graph.
+- [x] **Train Loop:**
+    - [x] Train Action Model with **SGD**. Save history & model.
+    - [x] Train Action Model with **Adam**. Save history & model.
+    - [x] Train Action Model with **Adagrad**. Save history & model.
+- [x] **Analysis:**
+    - [x] Plot all 3 loss curves on one graph.
     - [ ] Select best model for the real-time phase.
 - [ ] **Report M1:** Generate charts and write the "Methods" section.
 

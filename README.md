@@ -109,9 +109,17 @@ processed_face = process_face("path/to/image.jpg")
 # Returns: numpy array of shape (48, 48)
 ```
 
-### Training (To be implemented)
+### Training
 
-See `notebooks/` for training scripts and experiments.
+For the Action Recognition (Milestone 1) pipeline:
+
+```bash
+python src/make_dataset_action.py   # Prepare action dataset (UCF + custom)
+python src/train_action_model.py    # Train CNN-LSTM with SGD, Adam, Adagrad
+python src/check_models.py          # Verify saved models and run test inference
+```
+
+The optimizer comparison plot is saved to `reports/milestone1_optimizer_comparison.png`.
 
 ### Real-Time Inference (To be implemented)
 
