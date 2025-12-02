@@ -14,8 +14,8 @@
     - [x] Train Action Model with **Adagrad**. Save history & model.
 - [x] **Analysis:**
     - [x] Plot all 3 loss curves on one graph.
-    - [ ] Select best model for the real-time phase.
-- [ ] **Report M1:** Generate charts and write the "Methods" section.
+    - [x] Select best model for the real-time phase (Selected Adam due to steepest loss convergence).
+- [x] **Report M1:** Generate charts and write the "Methods" section.
 
 ## Phase 3: Milestone 2 Setup (Emotion)
 - [ ] **Data Prep (Emotion):** Process FER-2013 (Resize to 48x48).
