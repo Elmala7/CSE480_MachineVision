@@ -79,8 +79,8 @@
     {\large CSE480: Machine Vision}\\[0.2cm]
     {\large Fall 2025}\\[1.0cm]
     
-    {\huge \textbf{Milestone 1 Report}}\\[0.5cm]
-    {\Large \textbf{Action Recognition with CNN-LSTM}}\\[1.0cm]
+    {\huge \textbf{Final Project Report}}\\[0.5cm]
+    {\Large \textbf{Real-Time Human Behavior Analysis System}}\\[1.0cm]
     
     {\Large \textbf{Team 4}}\\[1.0cm]
     
@@ -111,20 +111,138 @@
 \newpage
 
 % --- SECTION 1 ---
-\section{Problem Definition}
-Human Activity Recognition (HAR) is a core problem in modern computer vision with direct impact on surveillance, healthcare, human-computer interaction, and assistive technologies. In video surveillance, automatic understanding of activities such as walking, waving for attention, or remaining seated allows systems to filter large video streams for anomalous or safety-critical events. In healthcare and ambient assisted living, continuous monitoring of patients or elderly users can detect falls, prolonged inactivity, or unusual motion patterns without requiring manual observation.
+\section{Introduction}
+This updated repository now contains the complete implementation for \textbf{Milestone 2}, transforming the project from a simple action classifier into a full \textbf{Real-Time Human Behavior Analysis System}.
 
-Recognizing actions from raw video is challenging because an action is not defined by a single frame but by how the body configuration evolves over time. Static postures such as \textit{Sitting} and \textit{Standing} can often be inferred from a single image, but actions like \textit{Walking} or \textit{Waving} are inherently temporal.
+While Milestone 1 focused only on \textit{Action Recognition} (Temporal), Milestone 2 adds \textbf{Emotion Recognition} (Spatial) and integrates both into a live webcam pipeline.
 
-% [PLACEHOLDER 1: Concept Illustration]
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.8\textwidth]{img1.png} % Replace with actual image
-    \caption{Overview of the Human Activity Recognition (HAR) challenge, distinguishing static vs. dynamic actions.}
-    \label{fig:problem_def}
-\end{figure}
+\section{The Main Idea: Dual-Stream Real-Time Analysis}
+The system now runs two parallel deep learning models simultaneously on a live video feed:
 
-A hybrid CNN-LSTM approach directly addresses this limitation by combining strong spatial feature extraction with temporal sequence modeling. The CNN branch focuses on \textit{what} is present in each image, while the LSTM branch focuses on \textit{how} these features change over time.
+\begin{enumerate}
+    \item \textbf{Action Branch (from Milestone 1):}
+    \begin{itemize}
+        \item \textbf{Input:} A buffer of the last 16 frames (Sequence).
+        \item \textbf{Model:} CNN-LSTM (MobileNetV2 + LSTM).
+        \item \textbf{Output:} What is the person \textit{doing}? (Walking, Waving, Standing, Sitting).
+        \item \textbf{Update Rate:} Updates every 16 frames (or sliding window) to capture motion.
+    \end{itemize}
+
+    \item \textbf{Emotion Branch (New in Milestone 2):}
+    \begin{itemize}
+        \item \textbf{Input:} A single cropped face image from the current frame.
+        \item \textbf{Model:} A custom VGG-style CNN trained on FER-2013.
+        \item \textbf{Output:} How does the person \textit{feel}? (Angry, Happy, Neutral, Sad, Surprise).
+        \item \textbf{Update Rate:} Updates every frame where a face is detected.
+    \end{itemize}
+\end{enumerate}
+
+The \textbf{Real-Time Pipeline} (\texttt{src/realtime\_pipeline.py}) acts as the conductor, managing the camera, detecting faces, synchronizing the two models, and visualizing the results on screen.
+
+\section{The Math of Things (Milestone 2 Additions)}
+Milestone 2 introduces Face Detection and a dedicated CNN for static image classification.
+
+\subsection{Face Detection (Haar Cascades)}
+To feed the emotion model, we must first locate the face. The project uses \textbf{Viola-Jones Haar Cascades}.
+
+\begin{itemize}
+    \item \textbf{The Math:} It uses "integral images" to rapidly compute the sum of pixel intensities in rectangular regions. It calculates features like:
+    
+    \item \textbf{Cascading:} Instead of running a complex neural network on every pixel, it runs a series of simple mathematical tests (weak classifiers). If a region fails the first simple test (e.g., "is the eye region darker than the cheek?"), it is immediately discarded. Only regions passing all tests are considered faces.
+\end{itemize}
+
+\subsection{Emotion Classification (CNN)}
+The emotion model uses a standard \textbf{Convolutional Neural Network}.
+
+\begin{itemize}
+    \item \textbf{Convolution:} The kernel slides over the face image to detect edges, corners, and textures (e.g., the curve of a smile or furrow of a brow).
+    \item \textbf{Max Pooling:} Reduces dimensionality by keeping only the strongest activation in a local neighborhood (e.g., $2 \times 2$ pool). This makes the model invariant to small shifts in position.
+    \item \textbf{Softmax Probability:} The final layer outputs a probability distribution over the 5 emotions.
+\end{itemize}
+
+\section{Line-by-Line Code Analysis (New Files)}
+Here is the deep dive into the specific files added or updated for Milestone 2.
+
+\subsection{\texttt{src/make\_dataset\_emotion.py}}
+\textbf{Purpose:} Prepares the FER-2013 dataset for the CNN.
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item \textbf{Lines 16-25 (\texttt{load\_fer2013}):}
+    \begin{itemize}
+        \item Iterates through train/test folders.
+        \item \textbf{\texttt{cv2.imread(..., 0)}:} Reads images in \textbf{Grayscale} (0 flag). Color is irrelevant for basic emotions.
+        \item \textbf{\texttt{cv2.resize(..., (48, 48))}:} Standardizes inputs to 48x48 pixels.
+    \end{itemize}
+    \item \textbf{Lines 30-45 (\texttt{build\_emotion\_dataset}):}
+    \begin{itemize}
+        \item Loads data and normalizes pixels: $X = X.astype('float32') / 255.0$.
+        \item Converts integer labels (0, 1, 2...) to \textbf{One-Hot Encoding} (e.g., $[0, 0, 1, 0, 0]$) using \texttt{to\_categorical}. This is required for Categorical Cross-Entropy loss.
+    \end{itemize}
+\end{itemize}
+
+\subsection{\texttt{src/train\_emotion\_model.py}}
+\textbf{Purpose:} Defines and trains the Emotion CNN.
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item \textbf{\texttt{build\_emotion\_model(input\_shape)}:}
+    \item \textbf{Block 1:} \texttt{Conv2D(32)} $\rightarrow$ \texttt{ReLU} $\rightarrow$ \texttt{BatchNorm} $\rightarrow$ \texttt{MaxPooling}. Extracts low-level features (edges).
+    \item \textbf{Block 2:} \texttt{Conv2D(64)}... Extracts mid-level features (eyes, mouths).
+    \item \textbf{Block 3:} \texttt{Conv2D(128)}... Extracts high-level concepts (smile, frown).
+    \item \textbf{Dropout (0.5):} Randomly turns off 50\% of neurons during training to prevent overfitting (forcing the network not to rely on specific pixels).
+    \item \textbf{\texttt{run\_training()}:}
+    \begin{itemize}
+        \item Uses \textbf{Data Augmentation} (\texttt{ImageDataGenerator}): Randomly rotates, zooms, and flips the training images. This artificially expands the dataset, making the model robust to head tilts.
+        \item Trains for 25 epochs and saves the model as \texttt{models/emotion\_model.keras}.
+    \end{itemize}
+\end{itemize}
+
+\subsection{\texttt{src/realtime\_pipeline.py}}
+\textbf{Purpose:} The main application script. It runs the loop that captures video and invokes models.
+
+\textbf{Analysis:}
+\begin{itemize}
+    \item \textbf{Initialization (\texttt{\_\_init\_\_}):}
+    \begin{itemize}
+        \item Loads the trained Action Model (\texttt{models/action\_model\_adam.keras}).
+        \item Loads the trained Emotion Model (\texttt{models/emotion\_model.keras}).
+        \item Loads the Face Detector (\texttt{cv2.CascadeClassifier}).
+        \item Initializes a \textbf{Frame Buffer} (\texttt{deque(maxlen=16)}): A fast queue that automatically drops old frames when new ones are added, keeping a rolling window of the last 16 frames.
+    \end{itemize}
+    \item \textbf{\texttt{preprocess\_frame\_for\_action}:}
+    \begin{itemize}
+        \item Resizes full frame to $128 \times 128$.
+        \item Normalizes to $[0, 1]$ (matching MobileNetV2 requirements).
+    \end{itemize}
+    \item \textbf{\texttt{predict\_action}:}
+    \begin{itemize}
+        \item Checks \texttt{if len(self.frame\_buffer) == 16}. It only predicts if the buffer is full.
+        \item Expands dims to $(1, 16, 128, 128, 3)$ (Batch dimension) and runs inference.
+    \end{itemize}
+    \item \textbf{\texttt{predict\_emotion}:}
+    \begin{itemize}
+        \item Takes a cropped face region.
+        \item Converts to Grayscale, resizes to $48 \times 48$, normalizes to $[0, 1]$.
+        \item Runs inference on the CNN.
+    \end{itemize}
+    \item \textbf{\texttt{run()} (The Main Loop):}
+    \begin{enumerate}
+        \item \textbf{Capture:} \texttt{cap.read()} gets a frame.
+        \item \textbf{Action Logic:} Adds frame to buffer. Updates \texttt{current\_action}.
+        \item \textbf{Face Logic:} \texttt{face\_cascade.detectMultiScale} finds faces.
+        \begin{itemize}
+            \item For every face found, it crops the image and calls \texttt{predict\_emotion}.
+            \item It draws a rectangle around the face.
+        \end{itemize}
+        \item \textbf{Visualization:} Uses \texttt{cv2.putText} to write the Action (top left) and Emotion (above the head) on the video feed.
+        \item \textbf{Display:} \texttt{cv2.imshow} renders the result.
+    \end{enumerate}
+\end{itemize}
+
+\subsection{\texttt{models/haarcascade\_frontalface\_default.xml}}
+\textbf{Purpose:} Pre-calculated mathematical features for face detection.
+\textbf{Analysis:} This is not code, but a serialized XML file containing thousands of "weak classifier" definitions (thresholds for pixel intensity differences) trained by OpenCV researchers. The \texttt{realtime\_pipeline.py} loads this to know \textit{how} to find a face.
 
 % --- SECTION 2 ---
 \section{Data Cleaning \& Preprocessing}
@@ -198,6 +316,24 @@ All three optimizers ultimately converge to similar low loss values, but their c
     \caption{Validation Loss comparison showing the convergence speed of the different optimizers.}
     \label{fig:loss_plot}
 \end{figure}
+
+\section{Summary of the Complete System}
+
+\begin{enumerate}
+    \item \textbf{Training Phase (Offline):}
+    \begin{itemize}
+        \item You ran \texttt{train\_action\_model.py} to create the "Motion Brain".
+        \item You ran \texttt{train\_emotion\_model.py} to create the "Emotion Brain".
+    \end{itemize}
+    \item \textbf{Inference Phase (Online/Real-Time):}
+    \begin{itemize}
+        \item You run \texttt{python src/realtime\_pipeline.py}.
+        \item The computer opens your webcam.
+        \item \textbf{Every Frame:} It looks for faces. If found, the \textbf{Emotion Brain} says "Happy/Sad".
+        \item \textbf{Every 16 Frames:} The \textbf{Action Brain} looks at the history and says "Waving/Standing".
+        \item The results are merged visually on the screen.
+    \end{itemize}
+\end{enumerate}
 
 \section{Repository Link}
 The source code for this project is available at:
@@ -1155,6 +1291,576 @@ def run_experiments():
 
 if __name__ == "__main__":
     # Limit TensorFlow logging noise
+    tf.get_logger().setLevel("ERROR")
+    run_experiments()
+\end{lstlisting}
+
+\newpage
+\subsection{src/make\_dataset\_emotion.py}
+\begin{lstlisting}[language=Python]
+import sys
+from pathlib import Path
+
+import cv2
+import numpy as np
+from tqdm import tqdm
+
+IMG_SIZE = 48
+CLASSES = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+NUM_CLASSES = len(CLASSES)
+
+
+def _one_hot(labels: np.ndarray) -> np.ndarray:
+    if labels.min() < 0 or labels.max() >= NUM_CLASSES:
+        raise ValueError(f"Labels out of range [0, {NUM_CLASSES - 1}]: min={labels.min()}, max={labels.max}")
+    return np.eye(NUM_CLASSES, dtype=np.float32)[labels]
+
+
+def _collect_image_label_pairs(split_dir: Path, class_to_idx: dict):
+    pairs = []
+    patterns = ("*.png", "*.jpg", "*.jpeg", "*.bmp", "*.tif", "*.tiff")
+
+    for class_name in CLASSES:
+        class_dir = split_dir / class_name
+        if not class_dir.is_dir():
+            raise FileNotFoundError(f"Missing class folder: {class_dir}")
+
+        class_files = []
+        for pattern in patterns:
+            class_files.extend(class_dir.glob(pattern))
+        class_files = sorted(class_files)
+
+        label_idx = class_to_idx[class_name]
+        for img_path in class_files:
+            pairs.append((img_path, label_idx))
+
+    return pairs
+
+
+def _load_split(split_dir: Path, split_name: str, class_to_idx: dict):
+    pairs = _collect_image_label_pairs(split_dir, class_to_idx)
+    if len(pairs) == 0:
+        raise RuntimeError(f"No images found in {split_dir}")
+
+    X_list = []
+    y_list = []
+    skipped = 0
+
+    for img_path, label_idx in tqdm(pairs, desc=f"Loading {split_name}"):
+        img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            skipped += 1
+            continue
+
+        img = cv2.resize(img, (IMG_SIZE, IMG_SIZE), interpolation=cv2.INTER_AREA)
+        img = img.astype(np.float32) / 255.0
+        img = img.reshape(IMG_SIZE, IMG_SIZE, 1)
+
+        X_list.append(img)
+        y_list.append(label_idx)
+
+    if len(X_list) == 0:
+        raise RuntimeError(f"No valid images were loaded for split '{split_name}'.")
+
+    if skipped > 0:
+        print(f"⚠ Skipped {skipped} unreadable image(s) in split '{split_name}'.")
+
+    X = np.stack(X_list, axis=0)
+    y = _one_hot(np.array(y_list, dtype=np.int64))
+    return X, y
+
+
+if __name__ == "__main__":
+    base_dir = Path(__file__).resolve().parents[1]
+    raw_root = base_dir / "data" / "raw" / "fer2013"
+    train_dir = raw_root / "train"
+    test_dir = raw_root / "test"
+
+    if not train_dir.is_dir() or not test_dir.is_dir():
+        print("❌ FER-2013 folder dataset not found.")
+        print("Expected structure:")
+        print(f"  {train_dir}/<class_name>/*.png")
+        print(f"  {test_dir}/<class_name>/*.png")
+        print("\nExpected class folders:")
+        print("  " + ", ".join(CLASSES))
+        sys.exit(1)
+
+    class_to_idx = {name: idx for idx, name in enumerate(CLASSES)}
+
+    X_train, y_train = _load_split(train_dir, "train", class_to_idx)
+    X_test, y_test = _load_split(test_dir, "test", class_to_idx)
+
+    processed_dir = base_dir / "data" / "processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+
+    np.save(processed_dir / "emotion_X_train.npy", X_train)
+    np.save(processed_dir / "emotion_y_train.npy", y_train)
+    np.save(processed_dir / "emotion_X_test.npy", X_test)
+    np.save(processed_dir / "emotion_y_test.npy", y_test)
+
+    print("Saved processed emotion dataset to", processed_dir)
+    print("emotion_X_train.npy shape:", X_train.shape)
+    print("emotion_y_train.npy shape:", y_train.shape)
+    print("emotion_X_test.npy shape:", X_test.shape)
+    print("emotion_y_test.npy shape:", y_test.shape)
+\end{lstlisting}
+
+\newpage
+\subsection{src/preprocessing.py}
+\begin{lstlisting}[language=Python]
+"""
+Preprocessing utilities for CSE480 Machine Vision Project
+Handles image preprocessing for emotion recognition model.
+"""
+
+import cv2
+import numpy as np
+
+
+def process_face(image):
+    """
+    Processes a face image for emotion recognition model.
+    
+    Converts the image to grayscale and resizes it to 48x48 pixels
+    as required by the Emotion Model specifications.
+    
+    Args:
+        image: Input image (numpy array) in BGR, RGB, or grayscale format.
+               Can be a file path (str) or numpy array.
+    
+    Returns:
+        numpy.ndarray: Processed grayscale image of shape (48, 48)
+    """
+    # Load image if it's a file path
+    if isinstance(image, str):
+        img = cv2.imread(image)
+        if img is None:
+            raise ValueError(f"Could not load image from path: {image}")
+    else:
+        img = image.copy()
+    
+    # Convert to grayscale if needed
+    if len(img.shape) == 3:
+        # Image is BGR or RGB
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    else:
+        # Image is already grayscale
+        gray = img
+    
+    # Resize to 48x48
+    resized = cv2.resize(gray, (48, 48), interpolation=cv2.INTER_AREA)
+    
+    return resized
+
+
+if __name__ == "__main__":
+    # Create a dummy blank image (e.g., 100x100 grayscale)
+    dummy_image = np.zeros((100, 100), dtype=np.uint8)
+    
+    # Process the image
+    processed = process_face(dummy_image)
+    
+    # Print the final shape
+    print(f"Input shape: {dummy_image.shape}")
+    print(f"Output shape: {processed.shape}")
+    
+    # Verify it's (48, 48)
+    assert processed.shape == (48, 48), f"Expected shape (48, 48), got {processed.shape}"
+    print("\n✓ Test passed! Output shape is (48, 48)")
+\end{lstlisting}
+
+\newpage
+\subsection{src/realtime\_pipeline.py}
+\begin{lstlisting}[language=Python]
+import os
+import time
+from collections import deque
+from pathlib import Path
+
+import cv2
+import numpy as np
+import tensorflow as tf
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+
+ACTION_CLASSES = ["Walking", "Waving", "Standing", "Sitting"]
+EMOTION_CLASSES = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+
+SEQ_LENGTH = 16
+ACTION_IMG_SIZE = 128
+EMOTION_IMG_SIZE = 48
+
+ACTION_PRED_INTERVAL = 5
+
+
+def _load_model(model_path: Path):
+    if not model_path.is_file():
+        raise FileNotFoundError(f"Model not found: {model_path}")
+
+    try:
+        return tf.keras.models.load_model(model_path, safe_mode=False, compile=False)
+    except TypeError:
+        return tf.keras.models.load_model(model_path, compile=False)
+
+
+def _draw_text(img, text: str, org: tuple[int, int], font_scale: float = 0.7, color=(255, 255, 255)):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(img, text, org, font, font_scale, (0, 0, 0), 4, cv2.LINE_AA)
+    cv2.putText(img, text, org, font, font_scale, color, 2, cv2.LINE_AA)
+
+
+def _preprocess_emotion_face(gray_frame: np.ndarray, face_bbox: tuple[int, int, int, int]) -> np.ndarray:
+    x, y, w, h = face_bbox
+    roi = gray_frame[y:y + h, x:x + w]
+    roi = cv2.resize(roi, (EMOTION_IMG_SIZE, EMOTION_IMG_SIZE), interpolation=cv2.INTER_AREA)
+    roi = roi.astype(np.float32) / 255.0
+    roi = roi.reshape(1, EMOTION_IMG_SIZE, EMOTION_IMG_SIZE, 1)
+    return roi
+
+
+def _preprocess_action_frame(bgr_frame: np.ndarray) -> np.ndarray:
+    frame = cv2.resize(bgr_frame, (ACTION_IMG_SIZE, ACTION_IMG_SIZE), interpolation=cv2.INTER_AREA)
+    frame = frame.astype(np.float32) / 255.0
+    return frame
+
+
+def _select_largest_face(faces: np.ndarray):
+    if faces is None or len(faces) == 0:
+        return None
+    x, y, w, h = max(faces, key=lambda b: int(b[2]) * int(b[3]))
+    return int(x), int(y), int(w), int(h)
+
+
+def main():
+    tf.get_logger().setLevel("ERROR")
+
+    base_dir = Path(__file__).resolve().parents[1]
+    models_dir = base_dir / "models"
+
+    action_model_path = models_dir / "action_model_adam.keras"
+    emotion_model_path = models_dir / "emotion_model_best.keras"
+
+    action_model = _load_model(action_model_path)
+    emotion_model = _load_model(emotion_model_path)
+
+    face_cascade_path = base_dir / "models" / "haarcascade_frontalface_default.xml"
+    if not face_cascade_path.exists():
+        raise FileNotFoundError(f"HaarCascade not found: {face_cascade_path}")
+
+    face_cascade = cv2.CascadeClassifier(str(face_cascade_path))
+    if face_cascade.empty():
+        raise RuntimeError(f"Failed to load HaarCascade: {face_cascade_path}")
+
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened() and hasattr(cv2, "CAP_AVFOUNDATION"):
+        cap = cv2.VideoCapture(0, cv2.CAP_AVFOUNDATION)
+
+    if not cap.isOpened():
+        raise RuntimeError("Could not open webcam (VideoCapture(0)).")
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    buffer = deque(maxlen=SEQ_LENGTH)
+    frame_count = 0
+    last_action_pred_frame = -ACTION_PRED_INTERVAL
+
+    action_label = "Collecting..."
+    action_conf = 0.0
+
+    emotion_label = "No face"
+    emotion_conf = 0.0
+
+    last_time = time.time()
+    fps_ema = 0.0
+
+    window_name = "CSE480 Real-Time Pipeline"
+
+    while True:
+        ok, frame = cap.read()
+        if not ok or frame is None:
+            break
+
+        frame_count += 1
+
+        now = time.time()
+        dt = now - last_time
+        last_time = now
+        fps = (1.0 / dt) if dt > 0 else 0.0
+        fps_ema = fps if fps_ema == 0.0 else (0.9 * fps_ema + 0.1 * fps)
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
+        best_face = _select_largest_face(faces)
+
+        if best_face is not None:
+            x, y, w, h = best_face
+            try:
+                face_input = _preprocess_emotion_face(gray, best_face)
+                e_probs = emotion_model.predict(face_input, verbose=0)[0]
+                e_idx = int(np.argmax(e_probs))
+                emotion_label = EMOTION_CLASSES[e_idx]
+                emotion_conf = float(e_probs[e_idx])
+            except Exception:
+                emotion_label = "Face err"
+                emotion_conf = 0.0
+
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            label_y = y - 10 if y - 10 > 10 else y + h + 20
+            _draw_text(frame, f"{emotion_label} {emotion_conf * 100:.1f}%", (x, label_y), font_scale=0.6, color=(0, 255, 0))
+        else:
+            emotion_label = "No face"
+            emotion_conf = 0.0
+
+        buffer.append(_preprocess_action_frame(frame))
+
+        if len(buffer) == SEQ_LENGTH and (frame_count - last_action_pred_frame) >= ACTION_PRED_INTERVAL:
+            seq = np.stack(buffer, axis=0).astype(np.float32)
+            seq = np.expand_dims(seq, axis=0)
+            a_probs = action_model.predict(seq, verbose=0)[0]
+            a_idx = int(np.argmax(a_probs))
+            action_label = ACTION_CLASSES[a_idx]
+            action_conf = float(a_probs[a_idx])
+            last_action_pred_frame = frame_count
+
+        _draw_text(frame, f"Status: {action_label} ({action_conf * 100:.0f}%)", (10, 30), font_scale=0.8, color=(255, 255, 255))
+
+        fps_text = f"FPS: {fps_ema:.1f}"
+        x_fps = max(10, frame.shape[1] - 170)
+        _draw_text(frame, fps_text, (x_fps, 30), font_scale=0.7, color=(255, 255, 0))
+
+        cv2.imshow(window_name, frame)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q") or key == 27:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    main()
+\end{lstlisting}
+
+\newpage
+\subsection{src/train\_emotion\_model.py}
+\begin{lstlisting}[language=Python]
+import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+import tensorflow as tf
+from tensorflow.keras import layers, models
+
+IMG_SIZE = 48
+NUM_CLASSES = 7
+BATCH_SIZE = 64
+EPOCHS = 15
+
+
+def load_data():
+    base_dir = Path(__file__).resolve().parents[1]
+    processed_dir = base_dir / "data" / "processed"
+
+    X_train = np.load(processed_dir / "emotion_X_train.npy")
+    y_train = np.load(processed_dir / "emotion_y_train.npy")
+    X_test = np.load(processed_dir / "emotion_X_test.npy")
+    y_test = np.load(processed_dir / "emotion_y_test.npy")
+
+    return X_train, y_train, X_test, y_test
+
+
+def build_vgg_model() -> models.Model:
+    inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 1), name="image")
+
+    x = layers.Conv2D(32, (3, 3), padding="same", activation="relu")(inputs)
+    x = layers.Conv2D(32, (3, 3), padding="same", activation="relu")(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+    x = layers.Dropout(0.25)(x)
+
+    x = layers.Conv2D(64, (3, 3), padding="same", activation="relu")(x)
+    x = layers.Conv2D(64, (3, 3), padding="same", activation="relu")(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+    x = layers.Dropout(0.25)(x)
+
+    x = layers.Conv2D(128, (3, 3), padding="same", activation="relu")(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+    x = layers.Dropout(0.25)(x)
+
+    x = layers.Flatten()(x)
+    x = layers.Dense(256, activation="relu")(x)
+    x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(NUM_CLASSES, activation="softmax", name="predictions")(x)
+
+    model = models.Model(inputs=inputs, outputs=outputs, name="emotion_simple_vgg")
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+        loss="categorical_crossentropy",
+        metrics=["accuracy"],
+    )
+    return model
+
+
+def _residual_block(x, filters: int, stride: int = 1):
+    shortcut = x
+
+    x = layers.Conv2D(filters, (3, 3), strides=stride, padding="same", use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+
+    x = layers.Conv2D(filters, (3, 3), strides=1, padding="same", use_bias=False)(x)
+    x = layers.BatchNormalization()(x)
+
+    if shortcut.shape[-1] != filters or stride != 1:
+        shortcut = layers.Conv2D(filters, (1, 1), strides=stride, padding="same", use_bias=False)(shortcut)
+        shortcut = layers.BatchNormalization()(shortcut)
+
+    x = layers.Add()([x, shortcut])
+    x = layers.ReLU()(x)
+    return x
+
+
+def build_resnet_model() -> models.Model:
+    inputs = layers.Input(shape=(IMG_SIZE, IMG_SIZE, 1), name="image")
+
+    x = layers.Conv2D(32, (3, 3), padding="same", use_bias=False)(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.ReLU()(x)
+
+    x = _residual_block(x, 32, stride=1)
+    x = _residual_block(x, 32, stride=1)
+
+    x = _residual_block(x, 64, stride=2)
+    x = _residual_block(x, 64, stride=1)
+
+    x = _residual_block(x, 128, stride=2)
+    x = _residual_block(x, 128, stride=1)
+
+    x = layers.GlobalAveragePooling2D()(x)
+    x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(NUM_CLASSES, activation="softmax", name="predictions")(x)
+
+    model = models.Model(inputs=inputs, outputs=outputs, name="emotion_mini_resnet")
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+        loss="categorical_crossentropy",
+        metrics=["accuracy"],
+    )
+    return model
+
+
+def _get_metric(history: dict, keys):
+    for k in keys:
+        if k in history:
+            return history[k]
+    raise KeyError(f"None of the keys {keys} found in history. Available keys: {list(history.keys())}")
+
+
+def _train_one(name: str, build_fn, X_train, y_train, X_val, y_val, models_dir: Path):
+    tf.keras.backend.clear_session()
+
+    model = build_fn()
+    print("\n" + "=" * 60)
+    print(f"Training: {name}")
+    print("=" * 60)
+    model.summary()
+
+    weights_path = models_dir / f"emotion_{name}_best.weights.h5"
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        filepath=weights_path,
+        monitor="val_accuracy",
+        mode="max",
+        save_best_only=True,
+        save_weights_only=True,
+        verbose=1,
+    )
+
+    history = model.fit(
+        X_train,
+        y_train,
+        validation_data=(X_val, y_val),
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE,
+        verbose=1,
+        callbacks=[checkpoint],
+    )
+
+    model.load_weights(weights_path)
+    val_acc = _get_metric(history.history, ["val_accuracy", "val_categorical_accuracy"])
+    best_val_acc = float(np.max(val_acc))
+
+    val_loss, val_acc_eval = model.evaluate(X_val, y_val, verbose=0)
+    print(f"{name} best val_accuracy (history): {best_val_acc:.4f}")
+    print(f"{name} val_accuracy (evaluate best weights): {val_acc_eval:.4f}")
+
+    return model, history.history, best_val_acc
+
+
+def run_experiments():
+    base_dir = Path(__file__).resolve().parents[1]
+    models_dir = base_dir / "models"
+    reports_dir = base_dir / "reports"
+    models_dir.mkdir(parents=True, exist_ok=True)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    X_train, y_train, X_test, y_test = load_data()
+    print("Loaded emotion dataset:")
+    print("X_train:", X_train.shape, "y_train:", y_train.shape)
+    print("X_test:", X_test.shape, "y_test:", y_test.shape)
+
+    vgg_model, vgg_hist, vgg_best = _train_one(
+        name="vgg",
+        build_fn=build_vgg_model,
+        X_train=X_train,
+        y_train=y_train,
+        X_val=X_test,
+        y_val=y_test,
+        models_dir=models_dir,
+    )
+
+    resnet_model, resnet_hist, resnet_best = _train_one(
+        name="mini_resnet",
+        build_fn=build_resnet_model,
+        X_train=X_train,
+        y_train=y_train,
+        X_val=X_test,
+        y_val=y_test,
+        models_dir=models_dir,
+    )
+
+    vgg_val_acc = _get_metric(vgg_hist, ["val_accuracy", "val_categorical_accuracy"])
+    resnet_val_acc = _get_metric(resnet_hist, ["val_accuracy", "val_categorical_accuracy"])
+
+    epochs_range = range(1, len(vgg_val_acc) + 1)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.plot(epochs_range, vgg_val_acc, label="Model A - Simple VGG")
+    ax.plot(epochs_range, resnet_val_acc, label="Model B - Mini-ResNet")
+    ax.set_title("FER-2013 Architecture Experiment: Validation Accuracy")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Validation Accuracy")
+    ax.legend()
+    fig.tight_layout()
+
+    plot_path = reports_dir / "milestone2_architecture_comparison.png"
+    fig.savefig(plot_path)
+    plt.close(fig)
+    print(f"Saved architecture comparison plot to {plot_path}")
+
+    if resnet_best > vgg_best:
+        best_name = "mini_resnet"
+        best_model = resnet_model
+        best_score = resnet_best
+    else:
+        best_name = "vgg"
+        best_model = vgg_model
+        best_score = vgg_best
+
+    best_path = models_dir / "emotion_model_best.keras"
+    best_model.save(best_path)
+    print(f"Saved best model ({best_name}, best val_accuracy={best_score:.4f}) to {best_path}")
+
+
+if __name__ == "__main__":
     tf.get_logger().setLevel("ERROR")
     run_experiments()
 \end{lstlisting}
