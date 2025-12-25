@@ -52,4 +52,4 @@ You must train the Action Model 3 separate times to compare:
 * **Report 2 (Full System):**
     * Emotion Model Design & Architecture Comparison.
     * Real-Time Integration & Logic.
-    * **Discussion:** Justify performance and analyze confusion matrices.
+    * **Discussion:** Justify performance
